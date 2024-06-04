@@ -1,1 +1,232 @@
+#include <Wire.h>
+#include <IRremote.h>
+#include <Servo.h>
+#include <arduino.h>
+#include <AFMotor.h>
 
+// Servo
+Servo Servo1;
+
+int servoPin = 10;
+int R_s = A0;
+int M_s = A1;
+int L_s = A2;
+int R;
+int M;
+int L;
+
+// IR pin
+#define IReceive 9
+// IR inputs
+#define up 70
+#define down 21
+#define right 67
+#define left 68
+#define middle 64
+#define zero 22
+#define one 12
+#define two 24
+#define three 94
+#define four 8
+#define forwardright 9
+#define forwardleft 7
+
+// Motor
+#define MotorA 7
+#define MotorA_Speed 5
+#define MotorB 8
+#define MotorB_Speed 6
+#define trigPin 13
+#define echoPin 12
+#define MAX_DISTANCE 200
+
+//I2C 
+#define SlaveAddress 10
+#define AnswerSize 8
+
+
+// Servo positions
+const int forward = 90;
+const int Right = 20;
+const int Left = 160;
+bool flwLoop = true;
+float closestDistance = 0;
+
+// Car move functions
+void move(bool a, int b, bool c, int d) {
+  digitalWrite(MotorA, a);
+  analogWrite(MotorA_Speed, b);
+  digitalWrite(MotorB, c);
+  analogWrite(MotorB_Speed, d);
+}
+
+void Fwd(int x) {
+  move(1, x, 1, x);
+}
+
+void Bkw(int x) {
+  move(0, x, 0, x);
+}
+
+void Rgt(int x) {
+  move(0, x, 1, x);
+}
+
+void Lft(int x) {
+  move(1, x, 0, x);
+}
+
+void Stp() {
+  move(0, 0, 0, 0);
+}
+void LtFw(int x) {
+  move(1, x / 2, 1, x);
+}
+void RtFw(int x) {
+  move(1, x, 1, x / 2);
+}
+
+
+// IR function
+void remote() {
+  if (IrReceiver.decode()) {
+    // Print that value on the Serial Monitor.
+    Serial.println(IrReceiver.decodedIRData.command);
+  }
+  IrReceiver.resume();
+  if (IrReceiver.decodedIRData.command == middle) {
+    // Stop the motors.
+    flwLoop = false;
+    Stp();
+  } else if (IrReceiver.decodedIRData.command == up) {
+    Fwd(255);
+  } else if (IrReceiver.decodedIRData.command == down) {
+    Bkw(255);
+  } else if (IrReceiver.decodedIRData.command == right) {
+    Rgt(100);
+  } else if (IrReceiver.decodedIRData.command == left) {
+    Lft(100);
+  } else if (IrReceiver.decodedIRData.command == zero) {
+    
+    follow();}
+     else if (IrReceiver.decodedIRData.command == forwardright) {
+    LtFw(255);}
+     else if (IrReceiver.decodedIRData.command == forwardleft) {
+    RtFw(255);}
+  
+}
+
+// Ultrasonic function to measure distance
+float measureDistance() {
+  digitalWrite(trigPin, LOW);
+  delay(2);
+  digitalWrite(trigPin, HIGH);
+  delay(10);
+  digitalWrite(trigPin, LOW);
+  long duration = pulseIn(echoPin, HIGH);
+  float distance = (duration / 2) * 0.0343;
+  return distance; // Return the calculated distance
+}
+
+void look_r() {
+  Servo1.write(Right);
+  delay(90);
+}
+
+void look_l() {
+  Servo1.write(Left);
+  delay(90);
+}
+
+void look_f() {
+  Servo1.write(forward);
+  delay(90);
+}
+
+float measureDistLeft() {
+  look_l();
+  return measureDistance();
+}
+
+float measureDistRight() {
+  look_r();
+  return measureDistance();
+}
+
+float measureDistFwd() {
+  look_f();
+  return measureDistance();
+}
+
+// follow function based on the flowchart
+void follow() {
+  while (flwLoop == true) {
+    // Measure distances in all directions
+    float forwardDistance = measureDistFwd();
+    float leftDistance = measureDistLeft();
+    float rightDistance = measureDistRight();
+    
+    // Determine the closest distance
+    if(forwardDistance < 7 || leftDistance < 7 || rightDistance < 7){
+      closestDistance = 3460349503;
+    }
+    else{
+      if(forwardDistance < leftDistance && forwardDistance < rightDistance){
+        closestDistance = forwardDistance;
+      }
+      else if(rightDistance < forwardDistance && rightDistance < leftDistance){
+        closestDistance = rightDistance;
+      }
+      else if(leftDistance < forwardDistance && leftDistance < rightDistance){
+        closestDistance = leftDistance;
+      }
+    }
+
+    
+    // Stop if an obstacle is within 7 cm directly ahead
+    
+    // Move forward if the path is clear
+    if (closestDistance == forwardDistance) {
+      Fwd(100);
+
+    }
+    // If the closest obstacle is on the right, turn right
+    else if (closestDistance == rightDistance) {
+      Rgt(100);
+      delay(300);
+      Stp();
+      delay(100);  // Short pause to stabilize before next measurement
+    }
+    // If the closest obstacle is on the left, turn left
+    else if (closestDistance == leftDistance) {
+      Lft(100);
+      delay(300);
+      Stp();
+      delay(100);  // Short pause to stabilize before next measurement
+    }
+    else {
+      Stp();
+      delay(200);  // Adding delay to stabilize
+    }
+    
+    if(flwLoop == false) { 
+   break; }
+  }
+  
+}
+
+void setup() {
+  
+  Serial.begin(9600);
+  Servo1.attach(servoPin);
+  for (int i = 3; i < 9; i++) {
+    pinMode(i, OUTPUT);
+    digitalWrite(3, 1);
+  }
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+}
+
+void loop() {
+follow();
+}
